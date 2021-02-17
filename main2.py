@@ -1,5 +1,5 @@
 from scapy.all import *
-opensession=rdpcap('C:/Users/Zohar_ysncvfn/PycharmProjects/FinalProject/venv/pcaps/TCPandTLSopen2.pcap')
+opensession=rdpcap('C:/Users/Zohar_ysncvfn/PycharmProjects/FinalProject/venv/pcaps/NewTCPandTLSOpen.pcap')
 closesession=rdpcap('C:/Users/Zohar_ysncvfn/PycharmProjects/FinalProject/venv/pcaps/TLSandTCPclose.pcap')
 dohQuery=rdpcap('C:/Users/Zohar_ysncvfn/PycharmProjects/FinalProject/venv/pcaps/DoHQuery2.pcap')
 dohResponse=rdpcap('C:/Users/Zohar_ysncvfn/PycharmProjects/FinalProject/venv/pcaps/DoHResponse.pcap')
@@ -50,7 +50,8 @@ for packet in inputpcap:
             pktcopy.time=first_packet_time+opensession[i].time-opensession[0].time
             outputpcap.append(pktcopy)
         firstquery=False
-    if DNSQR in packet and toreplace:
+        toreplace=False
+    elif DNSQR in packet and toreplace:
         for i , pkt in enumerate(dohQuery):
             newpacket, HostSeq=UpdateSeq(pkt, HostSeq,HostAck,packet[IP].src,packet[IP].dst)
             newpacket.time=first_packet_time+pkt.time-dohQuery[0].time+HandshakeDuration
