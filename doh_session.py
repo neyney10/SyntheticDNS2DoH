@@ -46,11 +46,15 @@ class DoHSession:
                 output_packets.append(updated_pkt)
             
         
-        ''' TODO
-        tcp_ack_packet = IP(src=, dst=) / TCP(flags='A', window=, seq=, ack=, sport=, dport=)
+
+        tcp_ack_packet = Ether()/IP(src=doh_packets[-1][IP].dst, dst=doh_packets[-1][IP].src)\
+                         /TCP(flags='A',sport=doh_packets[-1][TCP].dport, dport=doh_packets[-1][TCP].sport,\
+                         window=doh_packets[-1][TCP].window,seq=doh_packets[-1][TCP].seq, ack=doh_packets[-1][TCP].seq)
+
+        tcp_ack_packet.time=output_packets[-1].time
         updated_tcp_ack_packet = self.tcp_session.output_packets_of(tcp_ack_packet)
-        output_packets.append(updated_tcp_ack_packet)
-        '''
+        output_packets.append(updated_tcp_ack_packet[0])
+
         return output_packets
     
     def _update_ip_addresses(self, packet, src_ip, dst_ip):
