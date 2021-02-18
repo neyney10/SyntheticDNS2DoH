@@ -2,10 +2,12 @@ from scapy.all import *
 class DoHUser:
     def __init__(self, ip_address: str, sessions: list) -> None:
         self.ip_address = ip_address
+        self._pushback_duration = 0
         self._sessions = dict()
         
         for session in sessions:
             self._sessions[self._session_four_tuple_string_of(session)] = session
+            self._pushback_duration += session.handshake.duration
         
         
     def output_packets_of(self, packet) -> list:
@@ -18,23 +20,24 @@ class DoHUser:
         Returns:
             packets: a list of new updated packets.
         '''
-        doh_session = self._sessions[self._packet_four_tuple_string_of(packet)]
-        pushback_duration = -doh_session.tcp_session.handshake.duration
-        pushback_duration += sum(map(lambda s: s.tcp_session.handshake.duration,
-                                    filter(lambda s: s.tcp_session.src_ip == self.ip_address, 
-                                        self._sessions.values())))
-        
-        updated_packets = doh_session.output_packets_of(packet)
-        output_packets = []
-        for updated_pkt in updated_packets:
-            updated_pkt.time += pushback_duration
-            output_packets.append(updated_pkt)
-        
-        return output_packets
+        if UDP in packet and self._packet_four_tuple_string_of(packet) in self._sessions:
+            doh_session = self._sessions[self._packet_four_tuple_string_of(packet)]
+            updated_packets = doh_session.output_packets_of(packet)
+            output_packets = []
+            for updated_pkt in updated_packets:
+                updated_pkt.time += self._pushback_duration - doh_session.handshake.duration
+                output_packets.append(updated_pkt)
             
-    
+            return output_packets
+        else: # non doh session.
+            cloned_packet = packet.copy()
+            cloned_packet.time += self._pushback_duration
+            
+            return [cloned_packet]
+            
     def add_session(self, session):
         self._sessions[self._session_four_tuple_string_of(session)] = session
+        self._pushback_duration += session.handshake.duration
     
     def is_belongs(self, packet):
         return self._packet_four_tuple_string_of(packet) in self._sessions

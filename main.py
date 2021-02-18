@@ -9,7 +9,7 @@ opensession  = rdpcap('./pcaps/NewTCPandTLSOpen.pcap')
 closesession = rdpcap('./pcaps/TLSandTCPclose.pcap')
 dohQuery     = rdpcap('./pcaps/DoHQuery2.pcap')
 dohResponse  = rdpcap('./pcaps/DoHResponse.pcap')
-inputpcap    = rdpcap('./pcaps/DNSinput.pcap', count=100)
+inputpcap    = rdpcap('./pcaps/DNSinput.pcap', count=45)
 
 handshake = Handshake(opensession)
 outputpcap=list()
@@ -17,7 +17,7 @@ outputpcap=list()
 doh_dispatcher = DoHDispatcher(handshake, dohQuery, dohResponse, None, keep_handshake_dst_ip=True)
 
 for packet in inputpcap:
-    if DNS in packet:
+    if doh_dispatcher.is_belongs(packet):
         outputpcap.extend(doh_dispatcher.output_packets_of(packet))
     else:
         outputpcap.append(packet)
