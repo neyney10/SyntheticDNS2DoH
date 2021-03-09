@@ -14,7 +14,6 @@ class Handshake:
         return output_packets
         
     def get_initial_seq_ack_values(self):
-        first_packet = self.packets[0]
         src2dst_packets = self.src2dst_packets()
         dst2src_packets = self.dst2src_packets()
         
