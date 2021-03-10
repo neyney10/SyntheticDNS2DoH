@@ -5,12 +5,12 @@ from doh_user import DoHUser
 import random
 
 class DoHDispatcher:
-    def __init__(self, handshake, doh_queries, doh_responses, termination, keep_handshake_dst_ip: bool) -> None:
+    def __init__(self, handshake, doh_queries, doh_responses, termination, doh_server_ip: str) -> None:
         self.handshake = handshake
         self.doh_queries = doh_queries
         self.doh_responses = doh_responses
         self.termination = termination
-        self.keep_handshake_dst_ip = keep_handshake_dst_ip
+        self.doh_server_ip = doh_server_ip
         self.doh_users = dict()
     
     def output_packets_of(self, packet):
@@ -58,7 +58,7 @@ class DoHDispatcher:
                 src_ip=packet[IP].src,
                 dst_ip=packet[IP].dst,
                 src_port=packet[UDP].sport,
-                new_dst_ip='149.122.122.122',
+                new_dst_ip=self.doh_server_ip,
                 new_dst_port=443,
                 time=packet.time,
                 handshake=self.handshake,
