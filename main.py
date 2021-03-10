@@ -18,7 +18,7 @@ handshake  = Handshake(opensession)
 termination = closesession
 outputpcap = list()
 
-doh_dispatcher = DoHDispatcher(handshake, [dohQueryNextDNS, dohQueryQuad9], [dohResponseNextDNS, dohResponseQuad9], termination, keep_handshake_dst_ip=True)
+doh_dispatcher = DoHDispatcher(handshake, [dohQueryNextDNS, dohQueryQuad9], [dohResponseNextDNS, dohResponseQuad9], termination, doh_server_ip='149.122.122.122')
 
 print('[Step 3/5] Starting synthatic DoH conversion...')
 
