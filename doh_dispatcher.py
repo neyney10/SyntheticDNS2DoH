@@ -1,11 +1,12 @@
 from scapy.all import *
-from doh_session import DoHSession, DoHSession2
+from doh_session import DoHSession2
 from tcp_session import TCPSession
 from doh_user import DoHUser
 import random
 
 class DoHDispatcher:
-    def __init__(self, handshake, doh_queries, doh_responses, termination, doh_server_ip: str) -> None:
+    def __init__(self, handshake, doh_queries, doh_responses, termination, mode, doh_server_ip: str) -> None:
+        self.mode=mode
         self.handshake = handshake
         self.doh_queries = doh_queries
         self.doh_responses = doh_responses
@@ -39,7 +40,7 @@ class DoHDispatcher:
             doh_user = self.doh_users[packet[IP].dst]
             if doh_user.is_belongs(packet):
                 # if session exists
-                output_packets.extend(doh_user.output_packets_of(packet))
+                output_packets.extend(doh_user.output_packets_of(packet,mode=self.mode))
             else: # failsafe, if there is a response without query, output it as it is
                 output_packets.append(packet)
                 
@@ -50,6 +51,7 @@ class DoHDispatcher:
         
         if packet[IP].src not in self.doh_users:
             self.doh_users[packet[IP].src] = DoHUser(packet[IP].src, [])
+            #ask new class for doh relevant query & response.
             
         doh_user = self.doh_users[packet[IP].src]
 
@@ -68,18 +70,18 @@ class DoHDispatcher:
             )
             doh_user.add_session(new_doh_session)
                         
-        output_packets.extend(doh_user.output_packets_of(packet))
+        output_packets.extend(doh_user.output_packets_of(packet,mode=self.mode)) # add here index
                 
         return output_packets
     
-    def _on_other(self, packet):
+    def _on_other(self, packet): # add here index
         if packet[IP].src in self.doh_users:
             doh_user = self.doh_users[packet[IP].src]
-            return doh_user.output_packets_of(packet)
+            return doh_user.output_packets_of(packet,self.mode) # add here index
         else:
             if packet[IP].dst in self.doh_users:
                 doh_user = self.doh_users[packet[IP].dst]
-                return doh_user.output_packets_of(packet)
+                return doh_user.output_packets_of(packet,self.mode) # add here index
     
     def _create_new_doh_session(self, src_ip, src_port, dst_ip, new_dst_ip, new_dst_port, time, handshake, termination, doh_query, doh_response):
         new_doh_session = DoHSession2(src_ip, dst_ip, new_dst_ip, src_port, new_dst_port, time, doh_query, doh_response, handshake, termination)
