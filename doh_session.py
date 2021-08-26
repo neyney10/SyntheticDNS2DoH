@@ -2,73 +2,20 @@ from doh_server import DoHServer
 from doh_client import DoHClient
 from handshake import Handshake
 from scapy.all import *
-from tcp_session import TCPSession
+from doh_proxy import DoHProxy
+'''
+This class represents a DoHSession which has its own ip addresses, handshake, termination,
+ DoHClient, DoHserver etc.
 
-class DoHSession:
-    def __init__(self, tcp_session: TCPSession, doh_query: list, doh_response: list, keep_handshake_dst_ip: bool) -> None:
-        self.tcp_session = tcp_session
-        self.keep_handshake_dst_ip = keep_handshake_dst_ip
-        self.handshake = tcp_session.handshake
+@output_packets_of receives a DNS packet from the relevant DoHUser (which activate this function) and
+according to the nature of the DNS packet (query or response) it uses the @output_packets_of function of
+the DoHClient and DoHserver objects to get the relevant DoH packets to replace with the DNS packet.
 
-        new_src_ip = self.tcp_session.src_ip
-        new_dst_ip = self.handshake.packets[0][IP].dst if self.keep_handshake_dst_ip else self.tcp_session.dst_ip
-        self.doh_query = list(map(lambda p: self._update_ip_addresses(p, new_src_ip, new_dst_ip), doh_query))
-        self.doh_response = list(map(lambda p: self._update_ip_addresses(p, new_dst_ip, new_src_ip), doh_response))
-
-    def output_packets_of(self, packet):
-        if packet[DNS].qr == 1:
-            return self._doh_output(packet, self.doh_response)
-        elif packet[DNS].qr == 0:
-            return self._doh_output(packet, self.doh_query)
-
-    def get_handshake_packets(self, time):
-        handshake_packets = self.handshake.output_packets(time)
-        handshake_first_packet = handshake_packets[0]
-        handshake_src_ip = handshake_first_packet[IP].src
-        handshake_dst_ip = handshake_first_packet[IP].dst
-        new_src_ip = self.tcp_session.src_ip
-        new_dst_ip = handshake_dst_ip if self.keep_handshake_dst_ip else self.tcp_session.dst_ip
-        def update_ip_addresses_bidirectional(p):
-            if p[IP].src == handshake_src_ip:
-                return self._update_ip_addresses(p, new_src_ip, new_dst_ip)
-            else:
-                return self._update_ip_addresses(p, new_dst_ip, new_src_ip)
-        return list(map(lambda p: update_ip_addresses_bidirectional(p), handshake_packets))
-    
-    def _doh_output(self, packet, doh_packets):
-        handshake_duration = self.handshake.duration
-        output_packets = []
-        for doh_pkt in doh_packets:
-            updated_packets = self.tcp_session.output_packets_of(doh_pkt)
-            for updated_pkt in updated_packets:
-                updated_pkt.time = packet.time \
-                                    + handshake_duration \
-                                    + (doh_pkt.time - doh_packets[0].time)
-                                    
-                output_packets.append(updated_pkt)
-        
-        tcp_ack_packet = Ether()/IP(src=doh_packets[-1][IP].dst, dst=doh_packets[-1][IP].src) \
-                         /TCP(flags='A', sport=doh_packets[-1][TCP].dport, dport=doh_packets[-1][TCP].sport,
-                         window=doh_packets[-1][TCP].window, seq=doh_packets[-1][TCP].seq, ack=doh_packets[-1][TCP].seq)
-
-        tcp_ack_packet.time= output_packets[-1].time
-        updated_tcp_ack_packet = self.tcp_session.output_packets_of(tcp_ack_packet)
-        output_packets.extend(updated_tcp_ack_packet)
-
-        return output_packets
-    
-    def _update_ip_addresses(self, packet, src_ip, dst_ip):
-        cloned_packet = packet.copy()
-        cloned_packet[IP].src = src_ip
-        cloned_packet[IP].dst = dst_ip
-        
-        return cloned_packet
-                                    
-                
-                
+'''
 
 class DoHSession2:
-    def __init__(self, old_src_ip, old_dst_ip, new_dst_ip, new_src_port, new_dst_port, start_time, doh_queries: list, doh_responses: list, handshake: Handshake, termination) -> None:
+    def __init__(self,doh_proxy, old_src_ip, old_dst_ip, new_dst_ip, new_src_port, new_dst_port, start_time, doh_queries: list, doh_responses: list, handshake: Handshake, termination) -> None:
+        self.doh_proxy  = doh_proxy
         self.old_src_ip = old_src_ip
         self.old_dst_ip = old_dst_ip
         self.new_dst_ip = new_dst_ip
@@ -86,17 +33,19 @@ class DoHSession2:
         self.doh_server.set_ack(dst_ack)
         self.is_first_query = True
         self.last_dns_packet_time = 0
+        self.additonal_pushback= 0
 
-    def output_packets_of(self, packet):
+    def output_packets_of(self, packet,mode):
         output_packets = []
         self.last_dns_packet_time = packet.time
         if packet[DNS].qr == 0:
+            handshake_packets=list()
             if self.is_first_query:
+                handshake_packets=self.get_handshake_packets(self.start_time)
+            if mode =='o' or not self.is_first_query:
                 self.is_first_query = False
-                output_packets = self.get_handshake_packets(self.start_time)
-            else:
-                client_res = self.doh_client.output_packets_of([packet])
-                server_res = self.doh_server.output_packets_of(client_res)
+                client_res = self.doh_client.output_packets_of([packet],mode=mode)
+                server_res = self.doh_server.output_packets_of(self.doh_proxy,client_res,mode=mode)
                 client_res = list(map(lambda p:  self._update_ip_addresses(p,
                                                                             self.old_src_ip,
                                                                             self.new_dst_ip,
@@ -110,10 +59,23 @@ class DoHSession2:
                                                                             self.new_dst_port,
                                                                             self.new_src_port),
                                             server_res))
-                output_packets = client_res + server_res
+                output_packets.extend(client_res + server_res)
+                for pkt in output_packets:
+                    pkt.time += self.handshake.duration
+                output_packets= handshake_packets + output_packets
         elif packet[DNS].qr == 1:
-            server_res = self.doh_server.output_packets_of([packet])
-            client_res = self.doh_client.output_packets_of(server_res)
+            server_res = self.doh_server.output_packets_of(self.doh_proxy,[packet],mode =mode)
+            client_res = self.doh_client.output_packets_of(server_res,mode=mode)
+            duplicate_pkts=list()
+            for pkt in server_res: ########## for clients ack & 101 packet
+                if pkt[IP].src == '10.0.2.15':
+                    new_pkt=self.doh_client._update_seq_ack(pkt)
+                    client_res.append(new_pkt)
+                    duplicate_pkts.append(pkt)
+            for pkt in duplicate_pkts:
+                if pkt in server_res:
+                    server_res.remove(pkt) #############
+
             client_res = list(map(lambda p:  self._update_ip_addresses(p,
                                                                         self.old_src_ip,
                                                                         self.new_dst_ip,
@@ -127,12 +89,14 @@ class DoHSession2:
                                                                         self.new_dst_port,
                                                                         self.new_src_port),
                                         server_res))
-                                       
-            output_packets = server_res + client_res
+
+            output_packets.extend(server_res + client_res)
+            output_packets.sort(key=lambda p: p.time)
+            for pkt in output_packets:
+                pkt.time += self.handshake.duration
         
-        for pkt in output_packets:
-            pkt.time += self.handshake.duration
-            
+
+        self.additonal_pushback=self.calculate_additonal_pushback(output_packets)
         return output_packets
 
 
@@ -157,14 +121,16 @@ class DoHSession2:
                 return self.doh_client.output_packets_of(
                     [self._update_ip_addresses(p, self.old_src_ip, self.new_dst_ip, self.new_src_port, self.new_dst_port)], True)
             else:
-                return self.doh_server.output_packets_of(
+                return self.doh_server.output_packets_of(self.doh_proxy,
                     [self._update_ip_addresses(p, self.new_dst_ip, self.old_src_ip, self.new_dst_port, self.new_src_port)], True)
                 
         updated_ip_seq_ack_port_packets = sum(map(lambda p: update_ip_addresses_seq_ack_bidirectional(p), self.termination), [])
         for i, updated_packet in enumerate(updated_ip_seq_ack_port_packets):
             updated_packet.time = time \
                                 + (self.termination[i].time - self.termination[0].time) \
-                                + gap_time
+                                + gap_time \
+                                + self.handshake.duration \
+                                + self.additonal_pushback
             output_packets.append(updated_packet)
             
         return output_packets
@@ -175,4 +141,13 @@ class DoHSession2:
         cloned_packet[IP].dst = dst_ip
         cloned_packet[TCP].sport = src_port
         cloned_packet[TCP].dport = dst_port
+
         return cloned_packet
+
+    def calculate_additonal_pushback(self, output_packets):
+        time=output_packets[0].time
+        last_pkt_time= output_packets[-1].time
+        ans = last_pkt_time-time
+        if ans == 0 and self.additonal_pushback != 0: #to keep packets in their order
+            ans = self.additonal_pushback
+        return ans
