@@ -1,5 +1,5 @@
 from scapy.all import *
-
+'''
 class DeltaCalculator:
     def __init__(self, proxy_pcap, original_pcap):
         self.proxy          = proxy_pcap
@@ -14,3 +14,5 @@ class DeltaCalculator:
 
 
     def filter_dns
+
+'''

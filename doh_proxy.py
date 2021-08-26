@@ -1,14 +1,16 @@
 from scapy.all import *
-from doh_session import DoHSession2
-from tcp_session import TCPSession
-from doh_user import DoHUser
+
 '''
 This class gets the doh proxy pcap, splits it into partials.
 Handshake of TCP & TLS, termination of TLS & TCP,
 segments of each doh query and it following packets (acks, doh response and etc.)
+and the class has the ability to return index of relative response to specific query (at dns
+connector and get_response_index funcs).
 '''
 class DoHProxy:
-    def __init__(self, doh_pcap): #orginal
+    def __init__(self, doh_pcap, original_pcap):
+        self.original = original_pcap
+        self.dns_dict, self.dns_server = self.dns_connector(original_pcap)
         self.pcap = doh_pcap
         self.queries = list()
         self.responses = list()     #[ key= packet(doh query), value= packet(doh response) ]
@@ -49,7 +51,7 @@ class DoHProxy:
                 for pkt in segment:
                     if pkt[IP].src == '10.0.2.15' and len(pkt)>80:
                         query_segment.append(pkt)
-                    else:#if pkt[IP].src == '10.0.2.9':
+                    elif pkt[IP].src == '10.0.2.9' and len(pkt)>80:
                         response_segment.append(pkt)
                 self.queries.append(query_segment.copy())
                 self.responses.append(response_segment.copy())
@@ -102,3 +104,33 @@ class DoHProxy:
             else:
                 break
         return index, doh_pcap[:index]
+
+    def dns_connector(self, original_pcap):
+        dns_packets= dict()
+        index=0
+        for pkt in original_pcap:
+            if DNS in pkt and IP in pkt:
+                if pkt[DNS].qr == 0:
+                    dns_server=pkt[IP].dst
+                    two_tuple_string=str(pkt[UDP].sport)+str(pkt[IP].src)
+                    if two_tuple_string in dns_packets:
+                        dns_packets[two_tuple_string].append(index)
+                    else:
+                        dns_packets[two_tuple_string] = [index]
+                    index+=1
+        return dns_packets,dns_server
+
+    def get_response_index(self, packet):
+        if DNS in packet and packet[DNS].qr == 1:
+            two_tuple_string = str(packet[UDP].dport) + str(packet[IP].dst)
+            response_index = self.dns_dict[two_tuple_string]
+            ans = -1
+            if len(response_index) > 1:
+                ans = response_index.pop(0)
+                self.dns_dict[two_tuple_string] = response_index
+            else:
+                ans = response_index[0]
+            return ans
+        else:
+            return -1
+

@@ -1,6 +1,11 @@
 from scapy.all import *
 import random
+'''
+This class represents a DoH client and holds a list of all the relevant DoH queries.
 
+@output_packets_of function which is activate by DoHSession is returning randomized DoH query in case of
+synthetic mode or the relative DoH query in case of original mode.
+'''
 class DoHClient:
     def __init__(self, doh_queries) -> None:
         self.doh_queries = doh_queries
@@ -8,7 +13,7 @@ class DoHClient:
         self.ack          = 0
         self.output_packets_buffer = []
         
-    def output_packets_of(self, packets: list, is_termination=False, mode=''): #Idea: Add here index instead of random.
+    def output_packets_of(self, packets: list, is_termination=False, mode=''):
         packet = packets[-1]
         time = packet.time
         if is_termination == True:
@@ -19,7 +24,8 @@ class DoHClient:
                 doh_query=random.choice(self.doh_queries)  # NEED TO CHANGE
             else:
                 doh_query=self.doh_queries[0]
-                self.doh_queries=self.doh_queries[1:]
+                if (len(self.doh_queries) != 1):
+                    self.doh_queries=self.doh_queries[1:]
                 #doh_query=self.doh_queries[:2]  # taking query and ack packets 
                 #self.doh_queries=self.doh_queries[2:]   #  remove it from list
             updated_req = list(map(lambda p: self._update_seq_ack(p),

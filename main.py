@@ -9,7 +9,7 @@ print('[System] By Ariel University')
 print('[Step 1/5] Starting...')
 OriginalPcapName="./MalwareOriginal.pcap"
 #OriginalPcapName= input("Please enter path to input pcap")
-inputpcap=PcapReader(OriginalPcapName)
+inputpcap=rdpcap(OriginalPcapName) #PcapReader
 print('[Step 2/5] Loading PCAPS into memory...')
 opensession  = rdpcap('./pcaps/OpenSessionV2.pcap')
 closesession = rdpcap('./pcaps/TerminationV2.pcap')
@@ -24,16 +24,21 @@ outputpcap = list()
 userDecision= input("Press s for synthatic OR o for original")
 doh_proxy=list()
 if( userDecision =='s'):
-    doh_dispatcher = DoHDispatcher(handshake, [dohQueryNextDNS, dohQueryQuad9], [dohResponseNextDNS, dohResponseQuad9],
-                                   termination,userDecision, doh_server_ip='149.122.122.122')
+    DoHpcapName = "./MalwareProxy.pcap"
+    inputDoHpcap = rdpcap(DoHpcapName)
+    doh_proxy = DoHProxy(inputDoHpcap, inputpcap.copy())
+    dns_server = doh_proxy.dns_server
+    doh_dispatcher = DoHDispatcher(doh_proxy, handshake, [dohQueryNextDNS, dohQueryQuad9], [dohResponseNextDNS, dohResponseQuad9],
+                                   termination,userDecision, doh_server_ip=dns_server)
 elif(userDecision =='o'):
     DoHpcapName="./MalwareProxy.pcap"
     #DoHpcapName = input("Please enter path to DoH proxy pcap")
     inputDoHpcap = rdpcap(DoHpcapName)
-    doh_proxy = DoHProxy(inputDoHpcap)
+    doh_proxy = DoHProxy(inputDoHpcap,inputpcap.copy())
+    dns_server=doh_proxy.dns_server
     handshake = Handshake(doh_proxy.handshake)
-    doh_dispatcher=DoHDispatcher(handshake,doh_proxy.queries,[doh_proxy.responses,doh_proxy.packet_101],
-                                 doh_proxy.termination,userDecision,doh_server_ip='10.0.2.9')
+    doh_dispatcher=DoHDispatcher(doh_proxy,handshake,doh_proxy.queries,[doh_proxy.responses,doh_proxy.packet_101],
+                                 doh_proxy.termination,userDecision,doh_server_ip=dns_server)
 
 else:
     print("Error please run again and choose o or s")
@@ -54,6 +59,6 @@ outputpcap.sort(key=lambda p: p.time)
 
 # Write all changes to new pcap file
 print("[Step 4/5] Saving into a new PCAP file...")
-wrpcap('out.pcap', outputpcap)
+wrpcap('nonvpn-filetransfer-scp-62DoH.pcap', outputpcap)
 
-print("[Step 5/5] Done! Please see `out.pcap` file")
+print("[Step 5/5] Done! Please see `MalwareOutput.pcap` file")

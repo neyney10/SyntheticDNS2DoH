@@ -1,4 +1,10 @@
 from scapy.all import *
+'''
+This class is used only in  s mode (synthetic mode) and resposible to hold and order
+the handshake packets (TCP and TLS handshake)
+'''
+
+
 class Handshake:
     def __init__(self, packets) -> None:
         self.packets = packets

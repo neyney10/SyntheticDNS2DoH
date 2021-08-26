@@ -1,11 +1,21 @@
 from scapy.all import *
+
+'''
+This class represents a DoHUser and holds its ip address and the user's sessions.
+
+@output_packets_of receives a signle packet and returns the updated DoH packets by using
+@output_packets_of function of the relevant DoHSession object.
+'''
+
+
 class DoHUser:
     def __init__(self, ip_address: str, sessions: list) -> None:
         self.ip_address = ip_address
         self.requested_ips_by_dns = dict()
         self._pushback_duration = 0
         self._sessions = dict()
-        
+       # self.last_dns_packet_time=0
+        self.additonal_pushback=0
         for session in sessions:
             self._sessions[self._session_two_tuple_string_of(session)] = session
             self._pushback_duration += session.handshake.duration
@@ -30,19 +40,20 @@ class DoHUser:
         '''
         if DNS in packet and self._packet_two_tuple_string_of(packet) in self._sessions:
             doh_session = self._sessions[self._packet_two_tuple_string_of(packet)]
-            updated_packets = doh_session.output_packets_of(packet,mode=mode)  #add here index
+            updated_packets = doh_session.output_packets_of(packet,mode=mode)
             output_packets = []
             for updated_pkt in updated_packets:
-                updated_pkt.time += self._pushback_duration - doh_session.handshake.duration
+                updated_pkt.time += self._pushback_duration - doh_session.handshake.duration # if there are multiple handshakes
+                updated_pkt.time += self.additonal_pushback # additonal pushback to avoid unordered packets
                 output_packets.append(updated_pkt)
             
             if packet[DNS].qr == 1 and DNSRR in packet : # if response | calculate times, add it as value, key = ip addresess
-                additonal_pushback= self.calculate_additonal_pushback(output_packets)
+                self.additonal_pushback= self.calculate_additonal_pushback(output_packets)
                 for a in range(packet[DNS].ancount):
-                    self.requested_ips_by_dns[packet[DNSRR][a].rdata] = additonal_pushback
+                    self.requested_ips_by_dns[packet[DNSRR][a].rdata] = self.additonal_pushback
 
             
-            self.last_dns_packet_time = packet.time
+            #self.last_dns_packet_time = packet.time
             return output_packets
         else: # non doh session. 
             cloned_packet = packet.copy()
@@ -51,8 +62,7 @@ class DoHUser:
 
             elif cloned_packet[IP].dst in self.requested_ips_by_dns :
                 cloned_packet.time += (self._pushback_duration + self.requested_ips_by_dns[cloned_packet[IP].dst])
-                                        #or cloned_packet[IP].dst in self.requested_ips_by_dns :
-                #cloned_packet.time += self._pushback_duration  #+
+
             
             return [cloned_packet]
         
