@@ -51,7 +51,7 @@ class DoHProxy:
                 for pkt in segment:
                     if pkt[IP].src == '10.0.2.15' and len(pkt)>80:
                         query_segment.append(pkt)
-                    elif pkt[IP].src == '10.0.2.9' and len(pkt)>80:
+                    else:#if pkt[IP].src == '10.0.2.9' and len(pkt)>80:
                         response_segment.append(pkt)
                 self.queries.append(query_segment.copy())
                 self.responses.append(response_segment.copy())
@@ -105,6 +105,12 @@ class DoHProxy:
                 break
         return index, doh_pcap[:index]
 
+    '''
+    dns_connector function getting a dns packet and identifies it by setting a unique four_tuple_string
+    contains src_ip + dst_ip + src_port + dst_port. saving it into dns_packets dict with index.
+    get_response_index function will return the relative index.
+    with this index we can take the relative doh response packet.
+    '''
     def dns_connector(self, original_pcap):
         dns_packets= dict()
         index=0
@@ -112,22 +118,26 @@ class DoHProxy:
             if DNS in pkt and IP in pkt:
                 if pkt[DNS].qr == 0:
                     dns_server=pkt[IP].dst
-                    two_tuple_string=str(pkt[UDP].sport)+str(pkt[IP].src)
-                    if two_tuple_string in dns_packets:
-                        dns_packets[two_tuple_string].append(index)
+                    #two_tuple_string=str(pkt[UDP].sport)+str(pkt[IP].src)
+                    four_tuple_string = str(pkt[IP].src)+ str(pkt[IP].dst) + str(pkt[UDP].sport) +str(pkt[UDP].dport)
+                    if four_tuple_string in dns_packets:
+                        dns_packets[four_tuple_string].append(index)
                     else:
-                        dns_packets[two_tuple_string] = [index]
+                        dns_packets[four_tuple_string] = [index]
                     index+=1
         return dns_packets,dns_server
-
-    def get_response_index(self, packet):
-        if DNS in packet and packet[DNS].qr == 1:
-            two_tuple_string = str(packet[UDP].dport) + str(packet[IP].dst)
-            response_index = self.dns_dict[two_tuple_string]
+    '''
+    get_response_index function gets dns response packet and will take its four_tuple_string
+    (the opposite of dns_connector function string i.e dst_ip + src_ip + dst_port + src_port
+    '''
+    def get_response_index(self, pkt):
+        if DNS in pkt and pkt[DNS].qr == 1:
+            four_tuple_string = str(pkt[IP].dst) + str(pkt[IP].src) + str(pkt[UDP].dport) + str(pkt[UDP].sport)
+            response_index = self.dns_dict[four_tuple_string]
             ans = -1
             if len(response_index) > 1:
                 ans = response_index.pop(0)
-                self.dns_dict[two_tuple_string] = response_index
+                self.dns_dict[four_tuple_string] = response_index
             else:
                 ans = response_index[0]
             return ans

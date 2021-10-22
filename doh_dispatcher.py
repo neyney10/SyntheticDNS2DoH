@@ -96,7 +96,7 @@ class DoHDispatcher:
             )
             doh_user.add_session(new_doh_session)
                         
-        output_packets.extend(doh_user.output_packets_of(packet,mode=self.mode)) # add here index
+        output_packets.extend(doh_user.output_packets_of(packet,mode=self.mode))
                 
         return output_packets
     

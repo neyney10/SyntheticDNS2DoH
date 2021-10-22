@@ -17,7 +17,7 @@ class DoHServer:
         self.ack          = 0
         self.output_packets_buffer = []
     
-    def output_packets_of(self,doh_proxy: DoHProxy, packets: list, is_termination=False, mode =''):  #Idea: Add here index instead of random.
+    def output_packets_of(self,doh_proxy: DoHProxy, packets: list, is_termination=False, mode =''):
         packet = packets[-1]
         time = packet.time
         if is_termination == True:
@@ -33,7 +33,7 @@ class DoHServer:
                 if index == -1:
                     exit(-1)
                 try:
-                    doh_response = self.doh_responses[0][index]  # [0][0] index is the relative response to query
+                    doh_response = self.doh_responses[0][index]  # index is the relative response to query
                     # del self.doh_responses[0][0]
                 except:
                     doh_response = self.doh_responses[0][1]
